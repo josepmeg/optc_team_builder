@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPTC Pirate Rumble Team Builder</title>
+    <script defer src="./units.js"></script>
+    <script defer src="./rumble.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .character-list::-webkit-scrollbar { width: 8px; }
+        .character-list::-webkit-scrollbar-track { background: #2d3748; }
+        .character-list::-webkit-scrollbar-thumb { background: #718096; border-radius: 4px; }
+        .placeholder-plus { font-size: 2.5rem; line-height: 1; }
+        .char-slot-container { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; border-radius: 6px; border: 2px solid transparent; width: 120px; }
+        .char-inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; width: 110px; font-size: 0.75rem; }
+        .char-inputs-grid input, .char-inputs-grid select { width: 100%; text-align: center; padding: 2px; background-color: #4a5568; border: 1px solid #718096; border-radius: 4px; }
+        .profile-tags-container { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; min-height: 22px; }
+        .profile-tag { background-color: #2d3748; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; display: flex; align-items: center; }
+        .profile-tag button { background: none; border: none; color: #cbd5e0; margin-left: 4px; cursor: pointer; font-weight: bold; }
+        .add-profile-btn { background-color: #4a5568; border: 1px solid #718096; border-radius: 4px; cursor: pointer; font-size: 0.75rem; padding: 2px 0; }
+        .drag-over { border: 2px dashed #f59e0b; }
+        .tab-name-input { background: transparent; border: none; text-align: center; font-weight: 600; outline: none; padding: 8px 16px; width: 120px; cursor: pointer; }
+        .tab-name-input:focus { background-color: #4a5568; border-radius: 4px; cursor: text; }
+        .char-name-label { font-size: 0.75rem; font-weight: 600; height: 2.25rem; line-height: 1.25; }
+        
+        /* Tooltip styles */
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltiptext { visibility: hidden; width: 300px; background-color: #1a202c; color: #fff; text-align: left; border-radius: 6px; padding: 10px; position: absolute; z-index: 50; bottom: 125%; left: 50%; margin-left: -150px; opacity: 0; transition: opacity 0.3s; border: 1px solid #4a5568; font-size: 0.8rem; pointer-events: none; }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans antialiased">
+
+    <div id="app" class="container mx-auto p-4 max-w-7xl">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-yellow-400 tracking-wider">OPTC PIRATE RUMBLE TEAM BUILDER</h1>
+            <p class="text-gray-400">Theorycraft your Grand Party and Assault Mode teams.</p>
+        </header>
+
+        <div class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-gray-300">Mode</label>
+                    <div class="flex space-x-4" id="mode-selector">
+                        <label class="flex items-center"><input type="radio" name="mode" value="GP" class="form-radio text-yellow-500" checked><span class="ml-2">Grand Party (GP)</span></label>
+                        <label class="flex items-center"><input type="radio" name="mode" value="Assault" class="form-radio text-yellow-500"><span class="ml-2">Assault</span></label>
+                    </div>
+                </div>
+                <div>
+                    <label for="rules-input" class="block text-sm font-bold mb-2 text-gray-300">Global Notes / Rules</label>
+                    <input type="text" id="rules-input" class="w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="e.g., Only STR/QCK/DEX...">
+                </div>
+                <div class="flex items-end space-x-2">
+                    <button id="export-btn" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">Export Teams</button>
+                    <button id="import-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">Import Teams</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="gp-captain-container" class="bg-gray-800 p-4 rounded-lg mb-6 shadow-lg"></div>
+
+        <div class="mb-4">
+            <div class="flex border-b border-gray-700" id="team-tabs">
+                </div>
+        </div>
+
+        <div id="teams-container">
+            <div id="loading" class="text-center p-8"><p class="text-lg text-yellow-400">Loading character data...</p></div>
+        </div>
+    </div>
+
+    <div id="character-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-11/12 max-w-4xl h-5/6 flex flex-col">
+            <div class="p-4 border-b border-gray-700"><h2 class="text-xl font-bold text-yellow-400">Select a Character</h2><input type="text" id="search-input" class="w-full mt-2 bg-gray-700 border border-gray-600 rounded-md py-2 px-3" placeholder="Search by name or ID..."></div>
+            <div id="character-list" class="p-4 overflow-y-auto character-list flex-grow"></div>
+            <div class="p-4 border-t border-gray-700 flex justify-between items-center">
+                <div><label for="custom-cp-input" class="text-sm font-bold text-gray-300 mr-2">Custom CP:</label><input type="number" id="custom-cp-input" class="bg-gray-700 border border-gray-600 rounded-md py-2 px-3 w-32" placeholder="e.g., 12345"></div>
+                <div><button id="remove-char-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md">Remove</button><button id="close-modal-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md ml-2">Close</button></div>
+            </div>
+        </div>
+    </div>
+    <div id="profile-selection-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-11/12 max-w-sm">
+             <h3 class="text-lg font-bold text-yellow-400 mb-4">Select Profiles (Max 2)</h3><div id="profile-options-container" class="space-y-2"></div>
+             <div class="mt-6 flex justify-end"><button id="close-profile-modal-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Done</button></div>
+        </div>
+    </div>
+    <div id="import-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-11/12 max-w-lg">
+             <h3 class="text-lg font-bold text-yellow-400 mb-4">Import Team Data</h3>
+             <p class="text-sm text-gray-400 mb-2">Paste your exported data string below. This will overwrite all current teams.</p>
+             <textarea id="import-textarea" class="w-full h-40 bg-gray-900 border border-gray-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-yellow-500"></textarea>
+             <div class="mt-6 flex justify-end space-x-4">
+                <button id="close-import-modal-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                <button id="confirm-import-btn" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-md">Import</button>
+             </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let characters = [];
+            let draggedItem = null;
+            const state = {
+                currentMode: 'GP',
+                activeTab: 1,
+                globalRules: '',
+                gpCaptain: null,
+                tabNames: { 1: 'Team 1', 2: 'Team 2', 3: 'Team 3' },
+                teams: {
+                    1: { baseline: createEmptyTeam(), comparison: createEmptyTeam() },
+                    2: { baseline: createEmptyTeam(), comparison: createEmptyTeam() },
+                    3: { baseline: createEmptyTeam(), comparison: createEmptyTeam() },
+                },
+                modalContext: { teamType: null, slotIndex: null }
+            };
+
+            const typeColors = { 'STR': 'bg-red-700', 'DEX': 'bg-green-700', 'QCK': 'bg-blue-700', 'PSY': 'bg-yellow-600', 'INT': 'bg-purple-700' };
+            const typeTextColors = { 'STR': 'text-red-400', 'DEX': 'text-green-400', 'QCK': 'text-blue-400', 'PSY': 'text-yellow-400', 'INT': 'text-purple-400' };
+            const classEmojis = { 'Powerhouse': '💪', 'Free Spirit': '🚩', 'Driven': '😠', 'Cerebral': '📖', 'Slasher': '⚔️', 'Shooter': '🔫', 'Striker': '🔨', 'Fighter': '🥊' };
+            const profileOptions = ["Dmg Dealer", "Healer", "Debuffer", "Tank", "Piercer", "Buffer"];
+            const requirementCategories = ["", "STR", "DEX", "QCK", "PSY", "INT", "Slasher", "Striker", "Fighter", "Shooter", "Free Spirit", "Powerhouse", "Cerebral", "Driven"];
+            const requirementAbbreviations = {
+                'Powerhouse': 'PWH', 'Striker': 'STK', 'Slasher': 'SLS', 'Shooter': 'SHO', 
+                'Fighter': 'FGT', 'Driven': 'DRI', 'Free Spirit': 'FS', 'Cerebral': 'CER'
+            };
+
+
+            const DOM = {
+                teamsContainer: document.getElementById('teams-container'),
+                modeSelector: document.getElementById('mode-selector'),
+                teamTabs: document.getElementById('team-tabs'),
+                characterModal: document.getElementById('character-modal'),
+                closeModalButton: document.getElementById('close-modal-button'),
+                removeCharButton: document.getElementById('remove-char-button'),
+                characterList: document.getElementById('character-list'),
+                searchInput: document.getElementById('search-input'),
+                loadingIndicator: document.getElementById('loading'),
+                rulesInput: document.getElementById('rules-input'),
+                customCpInput: document.getElementById('custom-cp-input'),
+                gpCaptainContainer: document.getElementById('gp-captain-container'),
+                profileSelectionModal: document.getElementById('profile-selection-modal'),
+                profileOptionsContainer: document.getElementById('profile-options-container'),
+                closeProfileModalButton: document.getElementById('close-profile-modal-button'),
+                exportBtn: document.getElementById('export-btn'),
+                importBtn: document.getElementById('import-btn'),
+                importModal: document.getElementById('import-modal'),
+                closeImportModalBtn: document.getElementById('close-import-modal-btn'),
+                confirmImportBtn: document.getElementById('confirm-import-btn'),
+                importTextArea: document.getElementById('import-textarea'),
+            };
+
+            function createEmptyTeam() { return { slots: Array(8).fill(null), rules: '' }; }
+            function createEmptySlotData(id, customCP) { return { id, customCP, boost: '', profiles: [], requirement: { category: '', count: null } }; }
+            
+            function getImageUrl(id) {
+                const paddedId = String(id).padStart(4, '0');
+                const thousandsFolder = Math.floor(id / 1000);
+                let hundredsFolder = Math.floor((id % 1000) / 100) * 100;
+                
+                // This is the fix: If the hundreds folder is 0 (for any ID < 100), it should be the string '000'.
+                const hundredsFolderString = hundredsFolder === 0 ? '000' : String(hundredsFolder);
+
+                return `https://2shankz.github.io/optc-db.github.io/api/images/thumbnail/glo/${thousandsFolder}/${hundredsFolderString}/${paddedId}.png`;
+            }
+
+            function saveState() {
+                localStorage.setItem('optcTeamBuilderStateV4.5', JSON.stringify({ teams: state.teams, globalRules: state.globalRules, gpCaptain: state.gpCaptain, tabNames: state.tabNames }));
+            }
+
+            function loadState() {
+                let savedState = localStorage.getItem('optcTeamBuilderStateV4.5') || localStorage.getItem('optcTeamBuilderStateV4.4');
+                if (savedState) {
+                    const parsed = JSON.parse(savedState);
+                    state.teams = parsed.teams;
+                    state.tabNames = parsed.tabNames || { 1: 'Team 1', 2: 'Team 2', 3: 'Team 3' };
+                    for (let i = 1; i <= 3; i++) {
+                        ['baseline', 'comparison'].forEach(type => {
+                           if (state.teams?.[i]?.[type]?.slots) {
+                                state.teams[i][type].slots.forEach(slot => {
+                                    if (slot && !slot.requirement) slot.requirement = { category: '', count: null };
+                                    if (slot && !slot.profiles) slot.profiles = [];
+                                });
+                           }
+                        });
+                    }
+                    state.globalRules = parsed.globalRules || '';
+                    state.gpCaptain = parsed.gpCaptain || null;
+                    DOM.rulesInput.value = state.globalRules;
+                    saveState();
+                }
+            }
+
+            function renderApp() {
+                DOM.teamsContainer.innerHTML = `${createTeamHTML('baseline')}${createTeamHTML('comparison')}`;
+                renderGpCaptain();
+                updateTabs();
+                addEventListeners();
+            }
+            
+            function renderGpCaptain() {
+                DOM.gpCaptainContainer.style.display = state.currentMode === 'GP' ? 'block' : 'none';
+                if (state.currentMode !== 'GP') return;
+                const character = state.gpCaptain ? characters.find(c => c.id === state.gpCaptain.id) : null;
+                let details = '<p class="text-gray-400">Select a GP Captain</p>';
+                if (character) {
+                    details = `<div><p class="font-bold text-lg text-yellow-300">${character.name}</p><p class="text-sm mt-1"><strong>Passive:</strong> ${formatPassiveText(character.passive||'')}</p><p class="text-sm"><strong>Special (CD ${character.cooldown}):</strong> ${formatPassiveText(character.special||'')}</p></div>`;
+                }
+                DOM.gpCaptainContainer.innerHTML = `<h2 class="text-xl font-bold text-yellow-400 border-b-2 border-gray-700 pb-2 mb-4 uppercase tracking-wider">GP Captain</h2><div class="flex items-start space-x-4">${createCharacterSlotHTML('gpCaptain', 0)}<div class="flex-grow">${details}</div></div>`;
+            }
+
+            function createTeamHTML(teamType) {
+                const team = state.teams[state.activeTab][teamType];
+                const teamHeader = `<div class="flex justify-between items-center border-b-2 border-gray-700 pb-2 mb-4"><h2 class="text-xl font-bold text-yellow-400 uppercase tracking-wider">${teamType} Team</h2><button data-team-type="${teamType}" class="clear-team-btn text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-md">[Clear Team]</button></div>`;
+                return `<div class="bg-gray-800 p-4 rounded-lg mb-8 shadow-lg">${teamHeader}<div class="flex items-start justify-center flex-wrap gap-x-1 md:gap-x-2 gap-y-4">${team.slots.slice(0, 5).map((_, i) => createCharacterSlotHTML(teamType, i)).join('')}<div class="text-gray-600 font-bold text-2xl mx-1 pt-8 self-center">//</div>${team.slots.slice(5, 8).map((_, i) => createCharacterSlotHTML(teamType, i + 5)).join('')}</div><div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">${createSummaryHTML(teamType, 'passives', 'md:col-span-2')}${createSummaryHTML(teamType, 'totals', '')}</div></div>`;
+            }
+
+            function createCharacterSlotHTML(teamType, slotIndex) {
+                const slotData = teamType === 'gpCaptain' ? state.gpCaptain : state.teams[state.activeTab][teamType].slots[slotIndex];
+                const character = slotData ? characters.find(c => c.id === slotData.id) : null;
+                const typeColor = character ? typeColors[character.type] : 'bg-gray-700';
+                const shortName = character ? character.name.split('-')[0].trim() : '';
+                const emojis = character ? (character.classes || []).map(c => classEmojis[c]).filter(Boolean).slice(0, 2).join('') : '';
+                const tooltipHTML = character ? `<div class="tooltiptext"><p class="font-bold text-base mb-2">${character.name}</p><p><strong>Passive:</strong> ${formatPassiveText(character.passive||'')}</p><p><strong>Special (CD ${character.cooldown}):</strong> ${formatPassiveText(character.special||'')}</p></div>` : '';
+                const isDraggable = character && teamType !== 'gpCaptain' ? 'true' : 'false';
+
+                const characterContentHTML = character ? `
+                    <img src="${getImageUrl(character.id)}" alt="${character.name}" class="w-full h-full object-cover rounded-md" onerror="this.style.display='none';">
+                ` : `<span class="placeholder-plus text-gray-500">+</span>`;
+
+                const inputsHTML = (character && teamType !== 'gpCaptain') ? `
+                    <div class="char-inputs-grid">
+                        <input type="text" data-team="${teamType}" data-slot="${slotIndex}" class="boost-input col-span-2" placeholder="Boost %" value="${slotData.boost || ''}">
+                        <input type="number" data-team="${teamType}" data-slot="${slotIndex}" class="cp-input col-span-2" placeholder="CP" value="${slotData.customCP || ''}">
+                        <select data-team="${teamType}" data-slot="${slotIndex}" class="requirement-category">
+                            ${requirementCategories.map(opt => `<option value="${opt}" ${slotData.requirement?.category === opt ? 'selected' : ''}>${requirementAbbreviations[opt] || opt || 'Req. Type'}</option>`).join('')}
+                        </select>
+                        <input type="number" data-team="${teamType}" data-slot="${slotIndex}" class="requirement-count" placeholder="#" value="${slotData.requirement?.count || ''}">
+                    </div>
+                    <div class="profile-tags-container">
+                        ${(slotData.profiles || []).map(p => `<span class="profile-tag">${p}<button data-team="${teamType}" data-slot="${slotIndex}" data-profile="${p}" class="remove-profile-btn">&times;</button></span>`).join('')}
+                    </div>
+                    ${(slotData.profiles || []).length < 2 ? `<button data-team="${teamType}" data-slot="${slotIndex}" class="add-profile-btn w-full mt-1">[+ Add Profile]</button>` : ''}
+                ` : '';
+
+                return `
+                    <div class="char-slot-container" draggable="${isDraggable}" data-team-type="${teamType}" data-slot-index="${slotIndex}">
+                        <div class="text-lg h-6">${emojis}</div>
+                        <div class="tooltip">
+                            <div class="char-slot relative w-24 h-24 ${typeColor} rounded-md flex items-center justify-center text-center">
+                                ${characterContentHTML}
+                            </div>
+                            ${tooltipHTML}
+                        </div>
+                        <div class="char-name-label text-center">${shortName}</div>
+                        ${inputsHTML}
+                    </div>`;
+            }
+            
+            function formatPassiveText(text) {
+                if (!text) return '';
+                let formattedText = text;
+                formattedText = formattedText.replace(/\b(STR|DEX|QCK|PSY|INT)\b/g, (match) => `<strong class="${typeTextColors[match]}">${match}</strong>`);
+                formattedText = formattedText.replace(/\b(ATK|SPD|HP|DEF|CT|Powerhouse|Free Spirit|Driven|Cerebral|Slasher|Shooter|Striker|Fighter)\b/g, '<strong>$1</strong>');
+                return formattedText;
+            }
+
+            function generateTotalsHTML(teamType) {
+                const team = state.teams[state.activeTab][teamType];
+                const allMembers = team.slots.map(slot => slot ? characters.find(c => c.id === slot.id) : null).filter(Boolean);
+                const starters = allMembers.slice(0, 5);
+                const totalCost = starters.reduce((sum, c) => sum + c.cost, 0);
+                const totalCP = team.slots.reduce((sum, s) => sum + (s?.customCP || 0), 0);
+                const maxReqs = {};
+                team.slots.forEach(slot => {
+                    if (slot?.requirement?.category && slot.requirement.count > 0) {
+                        const { category, count } = slot.requirement;
+                        if (!maxReqs[category] || count > maxReqs[category]) maxReqs[category] = parseInt(count);
+                    }
+                });
+                const requirementsSummary = Object.entries(maxReqs).map(([category, needed]) => {
+                    const have = allMembers.filter(char => {
+                        if (Object.keys(typeColors).includes(category)) return char.type === category;
+                        if (Object.keys(classEmojis).includes(category)) return (char.classes || []).includes(category);
+                        return false;
+                    }).length;
+                    const color = have >= needed ? 'text-green-400' : 'text-red-400';
+                    return `<p class="${color}"><strong>${category}:</strong> ${have} / ${needed}</p>`;
+                }).join('');
+                return `<h3 class="font-bold text-gray-300 mb-2">Team Totals</h3><div class="text-sm space-y-1"><p class="${totalCost > 500 ? 'text-red-500' : 'text-gray-400'}"><strong>Total Cost:</strong> ${totalCost}</p><p class="text-gray-400"><strong>Total CP:</strong> ${totalCP.toLocaleString()}</p>${requirementsSummary}</div>`;
+            }
+
+            function createSummaryHTML(teamType, summaryType, extraClasses = '') {
+                if (summaryType === 'passives') {
+                    const team = state.teams[state.activeTab][teamType];
+                    const starters = team.slots.slice(0, 5).map(slot => slot ? characters.find(c => c.id === slot.id) : null).filter(Boolean);
+                    const passives = starters.map(c => c.passive).filter(p => p && p.trim() !== '');
+                    return `<div class="bg-gray-900 p-3 rounded-md ${extraClasses}"><h3 class="font-bold text-gray-300 mb-2">Aggregated Team Passives</h3><ul class="text-xs space-y-1 text-gray-400">${passives.length > 0 ? passives.map(p => `<li>- ${formatPassiveText(p)}</li>`).join('') : '<li>No passives.</li>'}</ul></div>`;
+                }
+                if (summaryType === 'totals') {
+                    return `<div id="totals-summary-${teamType}" class="bg-gray-900 p-3 rounded-md ${extraClasses}">${generateTotalsHTML(teamType)}</div>`;
+                }
+                return '';
+            }
+
+            function updateTotals(teamType) {
+                const totalsContainer = document.getElementById(`totals-summary-${teamType}`);
+                if (totalsContainer) {
+                    totalsContainer.innerHTML = generateTotalsHTML(teamType);
+                }
+            }
+
+            function updateTabs() {
+                DOM.teamTabs.innerHTML = [1, 2, 3].map(i => {
+                    const isActive = i === state.activeTab;
+                    const activeClasses = 'bg-gray-800 text-yellow-400 border-b-2 border-yellow-400';
+                    const inactiveClasses = 'text-gray-400';
+                    return `<div class="${isActive ? activeClasses : inactiveClasses}"><input type="text" data-tab="${i}" class="tab-name-input ${isActive ? 'text-yellow-400' : 'text-gray-400'}" value="${state.tabNames[i]}"></div>`;
+                }).join('');
+                document.querySelectorAll('.tab-name-input').forEach(input => {
+                    input.addEventListener('input', handleTabNameChange);
+                    input.addEventListener('click', e => { const tabNum = parseInt(e.target.dataset.tab); if (tabNum !== state.activeTab) { state.activeTab = tabNum; renderApp(); } });
+                });
+            }
+            
+            function handleTabNameChange(e) { const tabNum = e.target.dataset.tab; state.tabNames[tabNum] = e.target.value; saveState(); }
+            
+            function addEventListeners() {
+                document.querySelectorAll('.clear-team-btn').forEach(btn => btn.addEventListener('click', handleClearTeam));
+                document.querySelectorAll('.boost-input, .cp-input, .requirement-category, .requirement-count').forEach(input => {
+                    input.addEventListener('input', handleDataChange);
+                    input.addEventListener('change', handleDataChange);
+                });
+                document.querySelectorAll('.add-profile-btn').forEach(btn => btn.addEventListener('click', handleOpenProfileModal));
+                document.querySelectorAll('.remove-profile-btn').forEach(btn => btn.addEventListener('click', handleRemoveProfile));
+                document.querySelectorAll('.char-slot-container').forEach(container => {
+                    container.addEventListener('click', handleSlotClick);
+                    container.addEventListener('dragstart', handleDragStart);
+                    container.addEventListener('dragover', handleDragOver);
+                    container.addEventListener('dragleave', handleDragLeave);
+                    container.addEventListener('drop', handleDrop);
+                    container.addEventListener('dragend', handleDragEnd);
+                });
+            }
+
+            function handleDataChange(e) {
+                const { team, slot } = e.target.dataset;
+                const slotIndex = parseInt(slot);
+                const slotData = state.teams[state.activeTab][team]?.slots[slotIndex];
+                if (!slotData) return;
+                let needsTotalUpdate = false;
+                if (e.target.classList.contains('boost-input')) slotData.boost = e.target.value;
+                else if (e.target.classList.contains('cp-input')) { slotData.customCP = parseInt(e.target.value) || 0; needsTotalUpdate = true; }
+                else if (e.target.classList.contains('requirement-category')) { slotData.requirement.category = e.target.value; needsTotalUpdate = true; }
+                else if (e.target.classList.contains('requirement-count')) { slotData.requirement.count = parseInt(e.target.value) || null; needsTotalUpdate = true; }
+                saveState();
+                if (needsTotalUpdate) updateTotals(team);
+            }
+            
+            function populateCharacterList(filter = '') {
+                const filtered = characters.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()) || String(c.id).includes(filter));
+                DOM.characterList.innerHTML = filtered.map(c => `
+                    <div data-id="${c.id}" class="character-item p-2 rounded-md hover:bg-gray-700 cursor-pointer">
+                        <p class="font-bold text-sm">${c.id} - ${c.name}</p>
+                    </div>`).join('');
+                setTimeout(() => { document.querySelectorAll('.character-item').forEach(item => item.addEventListener('click', handleCharacterSelect)); }, 0);
+            }
+
+            function handleDragStart(e) { if (e.target.draggable) { draggedItem = e.currentTarget; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => { e.target.style.opacity = '0.5'; }, 0); } else { e.preventDefault(); } }
+            function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+            function handleDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+            function handleDragEnd(e) { e.target.style.opacity = '1'; draggedItem = null; document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); }
+            function handleDrop(e) { e.preventDefault(); const targetItem = e.currentTarget; targetItem.classList.remove('drag-over'); const sourceTeam = draggedItem.dataset.teamType; const sourceIndex = parseInt(draggedItem.dataset.slotIndex); const targetTeam = targetItem.dataset.teamType; const targetIndex = parseInt(targetItem.dataset.slotIndex); if (sourceTeam !== targetTeam) return; const teamSlots = state.teams[state.activeTab][sourceTeam].slots;[teamSlots[sourceIndex], teamSlots[targetIndex]] = [teamSlots[targetIndex], teamSlots[sourceIndex]]; saveState(); renderApp(); }
+            function handleClearTeam(e) { if (confirm(`Are you sure?`)) { const { teamType } = e.currentTarget.dataset; state.teams[state.activeTab][teamType].slots = Array(8).fill(null); saveState(); renderApp(); } }
+            function handleOpenProfileModal(e) { const { team, slot } = e.target.dataset; state.modalContext = { teamType: team, slotIndex: parseInt(slot) }; const slotData = state.teams[state.activeTab][team].slots[parseInt(slot)]; DOM.profileOptionsContainer.innerHTML = profileOptions.map(opt => `<label class="flex items-center space-x-3"><input type="checkbox" value="${opt}" class="form-checkbox text-yellow-500 h-5 w-5 profile-option-cb" ${(slotData.profiles || []).includes(opt) ? 'checked' : ''}><span class="text-gray-200">${opt}</span></label>`).join(''); DOM.profileSelectionModal.classList.remove('hidden'); document.querySelectorAll('.profile-option-cb').forEach(cb => cb.addEventListener('change', handleProfileSelection)); }
+            function handleProfileSelection(e) { const { teamType, slotIndex } = state.modalContext; const slotData = state.teams[state.activeTab][teamType].slots[slotIndex]; let selected = Array.from(document.querySelectorAll('.profile-option-cb:checked')).map(cb => cb.value); if (selected.length > 2) { e.target.checked = false; selected = Array.from(document.querySelectorAll('.profile-option-cb:checked')).map(cb => cb.value); alert("Max 2 profiles."); } slotData.profiles = selected; saveState(); }
+            function handleRemoveProfile(e) { const { team, slot, profile } = e.target.dataset; const slotData = state.teams[state.activeTab][team].slots[parseInt(slot)]; slotData.profiles = slotData.profiles.filter(p => p !== profile); saveState(); renderApp(); }
+            function handleSlotClick(e) { const container = e.currentTarget; if (!container?.dataset || e.target.closest('.char-inputs-grid, .profile-tags-container, .add-profile-btn')) return; const teamType = container.dataset.teamType; const slotIndex = parseInt(container.dataset.slotIndex); state.modalContext = { teamType, slotIndex }; let currentSlotData = teamType === 'gpCaptain' ? state.gpCaptain : state.teams[state.activeTab]?.[teamType]?.slots[slotIndex]; DOM.customCpInput.value = currentSlotData?.customCP || ''; DOM.characterModal.classList.remove('hidden'); populateCharacterList(); }
+            function handleCharacterSelect(e) { const charId = parseInt(e.currentTarget.dataset.id); const { teamType, slotIndex } = state.modalContext; const customCP = parseInt(DOM.customCpInput.value) || 0; if (teamType === 'gpCaptain') state.gpCaptain = { id: charId, customCP }; else state.teams[state.activeTab][teamType].slots[slotIndex] = createEmptySlotData(charId, customCP); saveState(); renderApp(); DOM.characterModal.classList.add('hidden'); }
+            function initializeApp() {
+                loadState();
+                const allUnits = [null, ...units];
+                characters = allUnits.map((unit, index) => {
+                    if (!unit) return null;
+                    const id = index, r = rumble[id] || {};
+                    let finalClasses = []; const classData = unit[2];
+                    if (classData) {
+                        if (typeof classData === 'string') finalClasses = [classData];
+                        else if (Array.isArray(classData)) {
+                            if (classData.length > 0 && typeof classData[0] === 'string') finalClasses = classData;
+                            else if (classData.length > 0 && Array.isArray(classData[0])) finalClasses = classData[0];
+                        }
+                    }
+                    return { id, name: unit[0], type: unit[1], classes: finalClasses, cost: unit[4] || 0, passive: (r.festAbility?.base.slice(-1)[0] || []).join(' '), special: (r.festSpecial?.base.descriptions.slice(-1)[0] || []).join(' '), cooldown: r.festSpecial?.base.cooldown || 'N/A' };
+                }).filter(Boolean);
+                DOM.loadingIndicator.style.display = 'none';
+                renderApp();
+            }
+            function handleExport() { const dataString = btoa(JSON.stringify({ teams: state.teams, tabNames: state.tabNames, gpCaptain: state.gpCaptain, globalRules: state.globalRules })); navigator.clipboard.writeText(dataString).then(() => { alert("All team data copied to clipboard!"); }, () => { alert("Failed to copy data."); }); }
+            function handleImport() { const dataString = DOM.importTextArea.value; if (!dataString) return alert("Please paste data string."); try { const parsed = JSON.parse(atob(dataString)); if (parsed.teams && parsed.tabNames) { state.teams = parsed.teams; state.tabNames = parsed.tabNames; state.gpCaptain = parsed.gpCaptain || null; state.globalRules = parsed.globalRules || ''; DOM.rulesInput.value = state.globalRules; loadState(); saveState(); renderApp(); DOM.importModal.classList.add('hidden'); alert("Teams imported successfully!"); } else { throw new Error("Invalid data structure."); } } catch (error) { alert("Import failed. Invalid data string."); console.error("Import error:", error); } }
+
+            // --- GLOBAL EVENT LISTENERS ---
+            DOM.modeSelector.addEventListener('change', e => { state.currentMode = e.target.value; renderApp(); });
+            DOM.rulesInput.addEventListener('input', e => { state.globalRules = e.target.value; saveState(); });
+            DOM.searchInput.addEventListener('input', () => populateCharacterList(DOM.searchInput.value));
+            DOM.closeModalButton.addEventListener('click', () => DOM.characterModal.classList.add('hidden'));
+            DOM.closeProfileModalButton.addEventListener('click', () => { DOM.profileSelectionModal.classList.add('hidden'); renderApp(); });
+            DOM.removeCharButton.addEventListener('click', () => { const { teamType, slotIndex } = state.modalContext; if (teamType === 'gpCaptain') state.gpCaptain = null; else state.teams[state.activeTab][teamType].slots[slotIndex] = null; saveState(); renderApp(); DOM.characterModal.classList.add('hidden'); });
+            DOM.exportBtn.addEventListener('click', handleExport);
+            DOM.importBtn.addEventListener('click', () => DOM.importModal.classList.remove('hidden'));
+            DOM.closeImportModalBtn.addEventListener('click', () => DOM.importModal.classList.add('hidden'));
+            DOM.confirmImportBtn.addEventListener('click', handleImport);
+            DOM.characterModal.addEventListener('click', e => { if (e.target === DOM.characterModal) DOM.characterModal.classList.add('hidden'); });
+            DOM.profileSelectionModal.addEventListener('click', e => { if (e.target === DOM.profileSelectionModal) { DOM.profileSelectionModal.classList.add('hidden'); renderApp(); } });
+
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
+}
